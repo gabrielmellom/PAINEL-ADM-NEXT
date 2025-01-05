@@ -5,10 +5,10 @@ import { db } from "../../../config/firebase";
 
 const SocialMidia = () => {
     const [socialLinks, setSocialLinks] = useState({
-        instagram: { url: '', active: false },
-        facebook: { url: '', active: false },
+        insta: { url: '', active: false },
+        face: { url: '', active: false },
         tiktok: { url: '', active: false },
-        whatsapp: { url: '', active: false },
+        whats: { url: '', active: false },
         youtube: { url: '', active: false }
     });
 
@@ -28,7 +28,7 @@ const SocialMidia = () => {
         fetchSocialLinks();
     }, [userId]);
 
-    const handleSocialLinkChange = async (platform: 'instagram' | 'facebook' | 'tiktok' | 'whatsapp' | 'youtube', field: 'url' | 'active', value: string | boolean) => {
+    const handleSocialLinkChange = async (platform: 'insta' | 'face' | 'tiktok' | 'whats' | 'youtube', field: 'url' | 'active', value: string | boolean) => {
        
         setSocialLinks(prevLinks => ({
             ...prevLinks,
@@ -59,7 +59,7 @@ const SocialMidia = () => {
                                     type="checkbox"
                                     className="sr-only peer"
                                     checked={data.active}
-                                    onChange={(e) => handleSocialLinkChange(platform as 'instagram' | 'facebook' | 'tiktok' | 'whatsapp' | 'youtube', 'active', e.target.checked)}
+                                    onChange={(e) => handleSocialLinkChange(platform as 'insta' | 'face' | 'tiktok' | 'whats' | 'youtube', 'active', e.target.checked)}
                                 />
                                 <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
                             </label>
@@ -68,7 +68,7 @@ const SocialMidia = () => {
                                 placeholder={`Enter ${platform} link`}
                                 value={data.url}
                                 onChange={(e) =>
-                                    handleSocialLinkChange(platform as "instagram" | "facebook" | "tiktok" | "whatsapp" | "youtube", "url", e.target.value)
+                                    handleSocialLinkChange(platform as "insta" | "face" | "tiktok" | "whats" | "youtube", "url", e.target.value)
                                 }
                                 className="flex-1 p-2 border border-gray-300 rounded"
                             />

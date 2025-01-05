@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../../../config/firebase';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 interface Promotion {
@@ -30,14 +30,11 @@ const ListaPromocoes: React.FC = () => {
         return;
       }
 
-      // Buscar o documento do usuário uma única vez
       const userDoc = await getDoc(doc(db, 'usuario', userId));
       if (!userDoc.exists()) return;
 
-      // Pegar o array de participantes
       const participantes = userDoc.data().participantes || [];
 
-      // Atualizar as promoções com a contagem de participantes
       const updatedPromos = promos.map(promo => ({
         ...promo,
         participantCount: participantes.filter(
@@ -122,9 +119,9 @@ const ListaPromocoes: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4 sm:mb-0">
             Promoções Disponíveis
           </h1>
           <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-1 rounded">
@@ -137,15 +134,15 @@ const ListaPromocoes: React.FC = () => {
             <p className="text-gray-600">Nenhuma promoção encontrada.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {promotions.map((promo, index) => (
               <div
                 key={index}
                 className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
               >
-                <div className="flex items-center p-4 relative group">
+                <div className="p-4">
                   {/* Imagem */}
-                  <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                  <div className="w-full h-48 bg-gray-100 rounded-lg overflow-hidden mb-4">
                     {promo.imagem ? (
                       <img
                         src={promo.imagem}
@@ -155,7 +152,7 @@ const ListaPromocoes: React.FC = () => {
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <svg
-                          className="w-8 h-8 text-gray-400"
+                          className="w-12 h-12 text-gray-400"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -171,67 +168,58 @@ const ListaPromocoes: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Informações */}
-                  <div className="ml-6 flex-grow">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-800">
-                          {promo.titulo}
-                        </h2>
-                        <div className="mt-1 flex items-center text-sm text-gray-600">
-                          <svg
-                            className="w-4 h-4 mr-1"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
-                          <span>
-                            {new Date(promo.dataInicio).toLocaleDateString('pt-BR')} até{' '}
-                            {new Date(promo.dataFim).toLocaleDateString('pt-BR')}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Ações */}
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => setShowConfirmDelete(index)}
-                          className="p-2 text-gray-400 hover:text-red-500 transition-colors duration-200"
+                  {/* Conteúdo */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                      <h2 className="text-lg font-semibold text-gray-800 line-clamp-2">
+                        {promo.titulo}
+                      </h2>
+                      <button
+                        onClick={() => setShowConfirmDelete(index)}
+                        className="p-2 text-gray-400 hover:text-red-500 transition-colors duration-200"
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                        </button>
-                      </div>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
                     </div>
 
-                    <div className="mt-2 flex items-center space-x-4">
+                    <div className="flex items-center text-sm text-gray-600">
+                      <svg
+                        className="w-4 h-4 mr-1 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                      <span className="truncate">
+                        {new Date(promo.dataInicio).toLocaleDateString('pt-BR')} até{' '}
+                        {new Date(promo.dataFim).toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {promo.tipoPromocao === 'senha' ? 'Senha Única' :
                          promo.tipoPromocao === 'palavras' ? '2 ou Mais Palavras' : 
                          'Questionamento'}
                       </span>
-                      <span className="text-sm text-gray-500">
-                        Premiação: {promo.premiacao}
-                      </span>
-                      {/* Contador de Participantes */}
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                         <svg
                           className="w-4 h-4 mr-1"
@@ -249,29 +237,33 @@ const ListaPromocoes: React.FC = () => {
                         {promo.participantCount || 0} Participantes
                       </span>
                     </div>
+
+                    <div className="text-sm text-gray-500">
+                      <span className="font-medium">Premiação:</span> {promo.premiacao}
+                    </div>
                   </div>
                 </div>
 
                 {/* Modal de Confirmação */}
                 {showConfirmDelete === index && (
-                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4 w-full">
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
                       <h3 className="text-lg font-semibold text-gray-800 mb-4">
                         Confirmar Exclusão
                       </h3>
                       <p className="text-gray-600 mb-6">
                         Tem certeza que deseja deletar esta promoção? Esta ação não pode ser desfeita.
                       </p>
-                      <div className="flex justify-end space-x-3">
+                      <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
                         <button
                           onClick={() => setShowConfirmDelete(null)}
-                          className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                          className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md transition-colors w-full sm:w-auto"
                         >
                           Cancelar
                         </button>
                         <button
                           onClick={() => handleDeletePromotion(index)}
-                          className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors"
+                          className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors w-full sm:w-auto"
                         >
                           Deletar
                         </button>

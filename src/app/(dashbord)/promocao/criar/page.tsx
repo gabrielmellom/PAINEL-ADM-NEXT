@@ -41,12 +41,14 @@ const Promocoes: React.FC = () => {
     informacoes: ''
   });
 
-  const tiposPromocao = [
-    { value: 'queMusica', label: 'Que música era?' },
+  const tiposPromocao = [ 
+    { value: 'qualMusica', label: 'Qual é a Música?' },
     { value: 'palavraSecreta', label: 'Palavra Secreta' },
     { value: 'completeFrase', label: 'Complete a Frase' },
     { value: 'numeroSorte', label: 'Número da Sorte' },
     { value: 'quiz', label: 'Quiz' },
+    { value: 'telefonePremiado', label: 'Telefone Premiado' },
+    { value: 'horaPremiada', label: 'Hora Premiada' },
   ];
 
   useEffect(() => {
