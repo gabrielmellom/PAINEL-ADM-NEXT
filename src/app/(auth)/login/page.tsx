@@ -22,7 +22,7 @@ const LoginPage = () => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log('Logged in successfully:', userCredential.user.email);
       const userId = userCredential.user.uid;
-      localStorage.setItem('userId', userId);
+      // localStorage.setItem('userId', userId);
 
       console.log(userId)
       // Redireciona para a página principal após o login

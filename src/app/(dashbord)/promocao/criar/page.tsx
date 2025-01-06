@@ -1,13 +1,15 @@
 "use client"
 import { useState, useEffect, ChangeEvent } from 'react';
 import { auth, db } from '../../../../config/firebase';
-import { doc, getDoc, updateDoc, arrayUnion, collection  } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, collection } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Check, AlertCircle, X } from "lucide-react";
 const storage = getStorage();
 
 interface Promotion {
-  id?: string;  // Adicionando o campo id
+  id?: string;
+  ativa?: boolean;
   titulo: string;
   tipoPromocao: string;
   dataInicio: string;
@@ -22,10 +24,30 @@ interface Promotion {
   informacoes?: string;
 }
 
+const Modal = ({ isOpen, onClose, children }: { isOpen: boolean; onClose: () => void; children: React.ReactNode }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div 
+        className="absolute inset-0 bg-black bg-opacity-50 transition-opacity"
+        onClick={onClose}
+      />
+      <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 transform transition-all ease-in-out duration-300 scale-100 opacity-100">
+        {children}
+      </div>
+    </div>
+  );
+};
+
 const Promocoes: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [previewImage, setPreviewImage] = useState<string>('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<Promotion>({
     titulo: '',
     tipoPromocao: '',
@@ -78,24 +100,86 @@ const Promocoes: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const showError = (message: string) => {
+    setErrorMessage(message);
+    setShowErrorModal(true);
+  };
+
+  const SuccessModal = () => (
+    <Modal isOpen={showSuccessModal} onClose={() => setShowSuccessModal(false)}>
+      <div className="p-6">
+        <button 
+          onClick={() => setShowSuccessModal(false)}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-500"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <div className="flex flex-col items-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+            <Check className="h-6 w-6 text-green-600" />
+          </div>
+          <div className="mt-3 text-center">
+            <h3 className="text-lg font-medium text-gray-900">Sucesso!</h3>
+            <p className="mt-2 text-sm text-gray-500">
+              Promoção adicionada com sucesso.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowSuccessModal(false)}
+            className="mt-5 w-full rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+
+  const ErrorModal = () => (
+    <Modal isOpen={showErrorModal} onClose={() => setShowErrorModal(false)}>
+      <div className="p-6">
+        <button 
+          onClick={() => setShowErrorModal(false)}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-500"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <div className="flex flex-col items-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+            <AlertCircle className="h-6 w-6 text-red-600" />
+          </div>
+          <div className="mt-3 text-center">
+            <h3 className="text-lg font-medium text-gray-900">Erro</h3>
+            <p className="mt-2 text-sm text-gray-500">
+              {errorMessage}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowErrorModal(false)}
+            className="mt-5 w-full rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+
   const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = async () => {
         try {
-          // Cria a referência no Storage
           const storageRef = ref(storage, `promocoes/${file.name}`);
-          // Faz o upload da imagem
           await uploadBytes(storageRef, file);
-          // Obtém a URL da imagem
           const downloadURL = await getDownloadURL(storageRef);
   
           setPreviewImage(downloadURL);
           setFormData(prev => ({ ...prev, imagem: downloadURL }));
         } catch (error) {
           console.error("Erro ao fazer upload da imagem:", error);
-          alert("Erro ao fazer upload da imagem. Por favor, tente novamente.");
+          showError("Erro ao fazer upload da imagem. Por favor, tente novamente.");
         }
       };
       reader.readAsDataURL(file);
@@ -104,23 +188,29 @@ const Promocoes: React.FC = () => {
 
   const handleAddPromotion = async () => {
     if (!user) {
-      alert('Você precisa estar autenticado para adicionar uma promoção.');
+      showError('Você precisa estar autenticado para adicionar uma promoção.');
       return;
     }
   
     if (!formData.titulo || !formData.premiacao || !formData.regulamento || !formData.tipoPromocao) {
-      alert('Preencha todos os campos obrigatórios!');
+      showError('Preencha todos os campos obrigatórios!');
       return;
     }
+
+    if (isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
   
     try {
       const userDoc = doc(db, 'usuario', user.uid);
-      // Gerar um ID único usando o Firestore
       const newId = doc(collection(db, 'dummy')).id;
       
       const newPromotion: Promotion = {
         ...formData,
-        id: newId,  // Adicionar o ID gerado
+        id: newId,
+        ativa: true,
         idcadastro: []
       };
   
@@ -130,6 +220,7 @@ const Promocoes: React.FC = () => {
   
       setPromotions([...promotions, newPromotion]);
       setFormData({
+        ativa:true,
         titulo: '',
         tipoPromocao: '',
         dataInicio: '',
@@ -144,14 +235,19 @@ const Promocoes: React.FC = () => {
         informacoes: ''
       });
       setPreviewImage('');
-      alert('Promoção adicionada com sucesso!');
+      setShowSuccessModal(true);
     } catch (error) {
       console.error('Erro ao adicionar promoção:', error);
-      alert('Erro ao adicionar promoção. Por favor, tente novamente.');
+      showError('Erro ao adicionar promoção. Por favor, tente novamente.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <SuccessModal />
+      <ErrorModal />
       <h1 className="text-2xl font-semibold text-gray-900 mb-8">Cadastre uma nova promoção</h1>
       {user ? (
         <div className="bg-white rounded-xl shadow-xl p-8 space-y-6 border border-gray-200 w-full max-w-4xl">
@@ -174,6 +270,7 @@ const Promocoes: React.FC = () => {
                       setFormData(prev => ({ ...prev, imagem: '' }));
                     }}
                     className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-md hover:bg-red-600 transition-colors duration-200 text-xs"
+                    disabled={isSubmitting}
                   >
                     Remover
                   </button>
@@ -187,6 +284,7 @@ const Promocoes: React.FC = () => {
                       accept="image/*"
                       onChange={handleImageChange}
                       className="hidden"
+                      disabled={isSubmitting}
                     />
                   </label>
                   <p className="mt-1 text-xs text-gray-500">
@@ -210,6 +308,7 @@ const Promocoes: React.FC = () => {
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm shadow-sm"
                 placeholder="Digite o título"
+                disabled={isSubmitting}
               />
             </div>
             <div>
@@ -221,6 +320,7 @@ const Promocoes: React.FC = () => {
                 value={formData.tipoPromocao}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm shadow-sm bg-white"
+                disabled={isSubmitting}
               >
                 <option value="">Selecione o tipo</option>
                 {tiposPromocao.map((tipo) => (
@@ -241,6 +341,7 @@ const Promocoes: React.FC = () => {
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm shadow-sm"
                 placeholder="Digite os prêmios"
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -257,6 +358,7 @@ const Promocoes: React.FC = () => {
                 value={formData.dataInicio}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm shadow-sm"
+                disabled={isSubmitting}
               />
             </div>
             <div>
@@ -269,6 +371,7 @@ const Promocoes: React.FC = () => {
                 value={formData.dataFim}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm shadow-sm"
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -282,6 +385,7 @@ const Promocoes: React.FC = () => {
                   className="sr-only peer"
                   checked={formData.participacaoIlimitada}
                   onChange={(e) => setFormData(prev => ({ ...prev, participacaoIlimitada: e.target.checked }))}
+                  disabled={isSubmitting}
                 />
                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
                 <span className="ml-2 text-sm text-gray-700">Participação ilimitada</span>
@@ -295,6 +399,7 @@ const Promocoes: React.FC = () => {
                   className="sr-only peer"
                   checked={formData.usarSefelSecap}
                   onChange={(e) => setFormData(prev => ({ ...prev, usarSefelSecap: e.target.checked }))}
+                  disabled={isSubmitting}
                 />
                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
                 <span className="ml-2 text-sm text-gray-700">SEFEL/SECAP</span>
@@ -306,7 +411,7 @@ const Promocoes: React.FC = () => {
                 onChange={handleChange}
                 placeholder="Número SEFEL/SECAP"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm shadow-sm"
-                disabled={!formData.usarSefelSecap}
+                disabled={!formData.usarSefelSecap || isSubmitting}
               />
             </div>
           </div>
@@ -324,6 +429,7 @@ const Promocoes: React.FC = () => {
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm resize-none shadow-sm"
                 placeholder="Digite o regulamento da promoção"
+                disabled={isSubmitting}
               />
             </div>
             <div>
@@ -337,6 +443,7 @@ const Promocoes: React.FC = () => {
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm resize-none shadow-sm"
                 placeholder="Informações adicionais sobre a promoção"
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -346,14 +453,26 @@ const Promocoes: React.FC = () => {
             <button
               onClick={() => window.history.back()}
               className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md"
+              disabled={isSubmitting}
             >
               Voltar
             </button>
             <button
               onClick={handleAddPromotion}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md"
+              disabled={isSubmitting}
+              className={`px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center
+                ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              Adicionar Promoção
+              {isSubmitting ? (
+                <>
+                  <div className="inline-block w-4 h-4 mr-2">
+                    <div className="w-full h-full rounded-full border-2 border-t-white border-r-white border-b-transparent border-l-transparent animate-spin"></div>
+                  </div>
+                  Adicionando...
+                </>
+              ) : (
+                'Adicionar Promoção'
+              )}
             </button>
           </div>
         </div>

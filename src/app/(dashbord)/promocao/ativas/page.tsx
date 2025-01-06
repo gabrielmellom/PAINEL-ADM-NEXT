@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { auth, db } from '../../../../config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+
 
 interface Promotion {
   id: string;
@@ -22,7 +24,7 @@ const ListaPromocoes: React.FC = () => {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [showConfirmDelete, setShowConfirmDelete] = useState<number | null>(null);
-
+  const router = useRouter()
   const fetchParticipantCounts = async (promos: Promotion[], userId: string) => {
     try {
       if (!userId) {
@@ -67,12 +69,20 @@ const ListaPromocoes: React.FC = () => {
     try {
       const userDoc = doc(db, 'usuario', userId);
       const snapshot = await getDoc(userDoc);
-
+  
       if (snapshot.exists()) {
-        const data = snapshot.data() as { promocoes?: Promotion[] };
-        const promos = data.promocoes || [];
-        setPromotions(promos);
-        await fetchParticipantCounts(promos, userId);
+        const data = snapshot.data();
+        if (data?.promocoes && Array.isArray(data.promocoes)) {
+          const activePromos = data.promocoes.filter(promo => promo.ativa === true);
+          setPromotions(activePromos);
+          if (activePromos.length > 0) {
+            await fetchParticipantCounts(activePromos, userId);
+          }
+        } else {
+          console.warn('Campo "promocoes" ausente ou não é um array.');
+        }
+      } else {
+        console.warn('Documento do usuário não encontrado.');
       }
     } catch (error) {
       console.error('Erro ao carregar promoções:', error);
@@ -80,6 +90,7 @@ const ListaPromocoes: React.FC = () => {
       setLoading(false);
     }
   };
+  
 
   const handleDeletePromotion = async (index: number) => {
     if (!user) return;
@@ -137,9 +148,10 @@ const ListaPromocoes: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {promotions.map((promo, index) => (
               <div
-                key={index}
-                className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
-              >
+              key={index}
+              onClick={() => router.push(`/promocao/${promo.id}`)}
+              className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
+            >
                 <div className="p-4">
                   {/* Imagem */}
                   <div className="w-full h-48 bg-gray-100 rounded-lg overflow-hidden mb-4">
