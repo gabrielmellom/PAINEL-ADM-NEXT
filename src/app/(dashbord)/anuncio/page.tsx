@@ -4,19 +4,37 @@ import React, { useState, useEffect } from "react";
 import { Upload, Trash2, Check, AlertCircle, X } from "lucide-react";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { collection, doc, updateDoc, arrayUnion, getDoc, arrayRemove } from "firebase/firestore";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import { db } from "../../../config/firebase";
+import { Timestamp } from "firebase/firestore";
 
-const ImageUploadComponent = () => {
+// Define interfaces for our types
+interface UserImage {
+  imagem: string;
+  link: string;
+  storagePath: string;
+  timestamp: Timestamp;
+  dataLimite: Timestamp;
+  ativo: boolean;
+}
+
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+const ImageUploadComponent: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [imageUrl, setImageUrl] = useState("");
-  const [userImages, setUserImages] = useState<any[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [showErrorModal, setShowErrorModal] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [imageUrl, setImageUrl] = useState<string>("");
+  const [dataLimite, setDataLimite] = useState<string>("");
+  const [userImages, setUserImages] = useState<UserImage[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const [showErrorModal, setShowErrorModal] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
   const storage = getStorage();
   const auth = getAuth();
@@ -33,23 +51,57 @@ const ImageUploadComponent = () => {
   useEffect(() => {
     if (currentUser) {
       fetchUserImages();
+      const interval = setInterval(checkExpiredImages, 1000 * 60); // Verifica a cada minuto
+      return () => clearInterval(interval);
     } else {
       setUserImages([]);
     }
   }, [currentUser]);
 
-  const fetchUserImages = async () => {
+  const checkExpiredImages = async (): Promise<void> => {
     if (!currentUser) return;
 
     try {
-      // Usando diretamente a referência do documento do usuário
       const userDocRef = doc(db, "usuario", currentUser.uid);
       const userDoc = await getDoc(userDocRef);
-      
+
       if (userDoc.exists()) {
         const images = userDoc.data()?.imagens || [];
-        // Ordenar por timestamp, considerando o formato de data do Firestore
-        setUserImages(images);
+        const currentDate = new Date();
+
+        let needsUpdate = false;
+        const updatedImages = images.map((image: UserImage) => {
+          const expirationDate = image.dataLimite?.toDate();
+          if (image.ativo && expirationDate && currentDate > expirationDate) {
+            needsUpdate = true;
+            return { ...image, ativo: false };
+          }
+          return image;
+        });
+
+        if (needsUpdate) {
+          await updateDoc(userDocRef, {
+            imagens: updatedImages
+          });
+          await fetchUserImages();
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao verificar imagens expiradas:", error);
+    }
+  };
+
+  const fetchUserImages = async (): Promise<void> => {
+    if (!currentUser) return;
+    await checkExpiredImages();
+    try {
+      const userDocRef = doc(db, "usuario", currentUser.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (userDoc.exists()) {
+        const images = userDoc.data()?.imagens || [];
+        const activeImages = images.filter((image: UserImage) => image.ativo);
+        setUserImages(activeImages);
       }
     } catch (error) {
       console.error("Erro ao buscar imagens:", error);
@@ -68,6 +120,19 @@ const ImageUploadComponent = () => {
       return;
     }
 
+    if (!dataLimite) {
+      showError("Por favor, defina uma data e hora limite.");
+      return;
+    }
+
+    const selectedDateTime = new Date(dataLimite);
+    const currentDateTime = new Date();
+
+    if (selectedDateTime < currentDateTime) {
+      showError("A data e hora limite não pode ser anterior ao momento atual.");
+      return;
+    }
+
     if (!currentUser) {
       showError("Você precisa estar autenticado para fazer upload de imagens.");
       return;
@@ -80,27 +145,28 @@ const ImageUploadComponent = () => {
     setIsUploading(true);
 
     try {
-      // Criar um nome único para a imagem baseado no ID do usuário
       const imagePath = `imagens/${currentUser.uid}/beauvio_${Date.now()}_${selectedImage.name}`;
       const storageRef = ref(storage, imagePath);
       await uploadBytes(storageRef, selectedImage);
 
       const downloadURL = await getDownloadURL(storageRef);
 
-      // Referência direta ao documento do usuário
       const userDocRef = doc(db, "usuario", currentUser.uid);
-      
+
       await updateDoc(userDocRef, {
         imagens: arrayUnion({
           imagem: downloadURL,
           link: imageUrl || "",
           storagePath: imagePath,
           timestamp: new Date(),
+          dataLimite: new Date(dataLimite),
+          ativo: true
         }),
       });
 
       setSelectedImage(null);
       setImageUrl("");
+      setDataLimite("");
       await fetchUserImages();
       setShowSuccessModal(true);
     } catch (error) {
@@ -111,13 +177,22 @@ const ImageUploadComponent = () => {
     }
   };
 
+  const formatDateTime = (date: Date): string => {
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  };
+
   const handleDeleteImage = async (image: any) => {
     if (!currentUser) return;
 
     try {
-      // Referência direta ao documento do usuário
       const userDocRef = doc(db, "usuario", currentUser.uid);
-      
+
       await updateDoc(userDocRef, {
         imagens: arrayRemove(image),
       });
@@ -130,12 +205,12 @@ const ImageUploadComponent = () => {
     }
   };
 
-  const Modal = ({ isOpen, onClose, children }: { isOpen: boolean; onClose: () => void; children: React.ReactNode }) => {
+  const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
     if (!isOpen) return null;
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div 
+        <div
           className="absolute inset-0 bg-black bg-opacity-50 transition-opacity"
           onClick={onClose}
         />
@@ -155,7 +230,7 @@ const ImageUploadComponent = () => {
   const SuccessModal = () => (
     <Modal isOpen={showSuccessModal} onClose={() => setShowSuccessModal(false)}>
       <div className="p-6">
-        <button 
+        <button
           onClick={() => setShowSuccessModal(false)}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-500"
         >
@@ -185,7 +260,7 @@ const ImageUploadComponent = () => {
   const ErrorModal = () => (
     <Modal isOpen={showErrorModal} onClose={() => setShowErrorModal(false)}>
       <div className="p-6">
-        <button 
+        <button
           onClick={() => setShowErrorModal(false)}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-500"
         >
@@ -252,15 +327,15 @@ const ImageUploadComponent = () => {
             {selectedImage && (
               <div className="mt-4">
                 <p className="text-sm text-gray-500 mb-2">Imagem selecionada:</p>
-                <img 
-                  src={URL.createObjectURL(selectedImage)} 
-                  alt="Selected" 
+                <img
+                  src={URL.createObjectURL(selectedImage)}
+                  alt="Selected"
                   className="mx-auto mb-4 max-h-48 object-contain"
                 />
               </div>
             )}
-            <label 
-              htmlFor="file-upload" 
+            <label
+              htmlFor="file-upload"
               className={`cursor-pointer block md:inline-block ${isUploading ? 'pointer-events-none opacity-50' : ''}`}
             >
               <span className="text-blue-600 hover:text-blue-800 text-sm md:text-base">
@@ -269,13 +344,26 @@ const ImageUploadComponent = () => {
               <span className="text-gray-500 ml-2 text-sm md:text-base">ou arraste aqui</span>
             </label>
           </div>
-          <div className="mt-4">
+          <div className="mt-4 space-y-4">
+            <label htmlFor="datetime-limit" className="block text-sm font-medium text-gray-700">
+              Url do redirecionamento              </label>
             <input
               type="text"
               placeholder="Cole o URL adicional aqui"
               className="w-full p-2 border border-gray-300 rounded text-sm md:text-base"
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
+              disabled={isUploading}
+            />
+            <label htmlFor="datetime-limit" className="block text-sm font-medium text-gray-700">
+              Data e Hora Limite
+            </label>
+            <input
+              id="datetime-limit"
+              type="datetime-local"
+              className="w-full p-2 border border-gray-300 rounded text-sm md:text-base"
+              value={dataLimite}
+              onChange={(e) => setDataLimite(e.target.value)}
               disabled={isUploading}
             />
           </div>
@@ -291,15 +379,17 @@ const ImageUploadComponent = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-          <h2 className="text-xl font-semibold mb-4">Minhas Imagens</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {userImages.map((image, index) => (
               <div key={index} className="relative group">
-                <img 
-                  src={image.imagem} 
-                  alt={`Imagem ${index + 1}`} 
-                  className="w-full h-48 object-cover rounded-lg transition-transform duration-200 group-hover:scale-[1.02]" 
+                <img
+                  src={image.imagem}
+                  alt={`Imagem ${index + 1}`}
+                  className="w-full h-48 object-cover rounded-lg transition-transform duration-200 group-hover:scale-[1.02]"
                 />
+                <div className="absolute bottom-2 left-2 right-2 bg-black bg-opacity-50 text-white p-2 rounded text-xs">
+                  <p>Expira em: {new Date(image.dataLimite?.toDate()).toLocaleDateString()}</p>
+                </div>
                 <button
                   className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition-opacity opacity-0 group-hover:opacity-100"
                   onClick={() => handleDeleteImage(image)}

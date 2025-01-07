@@ -22,6 +22,9 @@ interface Promotion {
   usarSefelSecap: boolean;
   idcadastro: string[];
   informacoes?: string;
+  ganhadores: string;
+  pergunta: string;
+  
 }
 
 const Modal = ({ isOpen, onClose, children }: { isOpen: boolean; onClose: () => void; children: React.ReactNode }) => {
@@ -60,17 +63,18 @@ const Promocoes: React.FC = () => {
     participacaoIlimitada: false,
     usarSefelSecap: false,
     idcadastro: [],
-    informacoes: ''
+    informacoes: '',
+    ganhadores: '',
+    pergunta:''
   });
 
   const tiposPromocao = [ 
-    { value: 'qualMusica', label: 'Qual é a Música?' },
-    { value: 'palavraSecreta', label: 'Palavra Secreta' },
-    { value: 'completeFrase', label: 'Complete a Frase' },
-    { value: 'numeroSorte', label: 'Número da Sorte' },
+    { value: 'qual é a Musica', label: 'Qual é a Música?' },
+    { value: 'palavra Secreta', label: 'Palavra Secreta' },
+    { value: 'complete Frase', label: 'Complete a Frase' },
+    { value: 'numero da Sorte', label: 'Número da Sorte' },
     { value: 'quiz', label: 'Quiz' },
-    { value: 'telefonePremiado', label: 'Telefone Premiado' },
-    { value: 'horaPremiada', label: 'Hora Premiada' },
+    { value: 'hora Premiada', label: 'Hora Premiada' },
   ];
 
   useEffect(() => {
@@ -232,7 +236,9 @@ const Promocoes: React.FC = () => {
         participacaoIlimitada: false,
         usarSefelSecap: false,
         idcadastro: [],
-        informacoes: ''
+        informacoes: '',
+        ganhadores:'',
+        pergunta:'',
       });
       setPreviewImage('');
       setShowSuccessModal(true);
@@ -329,6 +335,20 @@ const Promocoes: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Pergunta da promoção
+              </label>
+              <input
+                type="text"
+                name="pergunta"
+                value={formData.pergunta}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm shadow-sm"
+                placeholder="Ex: Qual a palavra secreta de hoje?"
+                disabled={isSubmitting}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

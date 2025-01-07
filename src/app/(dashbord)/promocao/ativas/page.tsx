@@ -5,7 +5,6 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
-
 interface Promotion {
   id: string;
   titulo: string;
@@ -17,6 +16,7 @@ interface Promotion {
   imagem: string;
   palavraChave: string;
   participantCount?: number;
+  ativa: boolean;
 }
 
 const ListaPromocoes: React.FC = () => {
@@ -24,7 +24,8 @@ const ListaPromocoes: React.FC = () => {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [showConfirmDelete, setShowConfirmDelete] = useState<number | null>(null);
-  const router = useRouter()
+  const router = useRouter();
+
   const fetchParticipantCounts = async (promos: Promotion[], userId: string) => {
     try {
       if (!userId) {
@@ -78,11 +79,7 @@ const ListaPromocoes: React.FC = () => {
           if (activePromos.length > 0) {
             await fetchParticipantCounts(activePromos, userId);
           }
-        } else {
-          console.warn('Campo "promocoes" ausente ou não é um array.');
         }
-      } else {
-        console.warn('Documento do usuário não encontrado.');
       }
     } catch (error) {
       console.error('Erro ao carregar promoções:', error);
@@ -90,20 +87,31 @@ const ListaPromocoes: React.FC = () => {
       setLoading(false);
     }
   };
-  
 
-  const handleDeletePromotion = async (index: number) => {
+  const handleDeletePromotion = async (e: React.MouseEvent, index: number) => {
+    e.stopPropagation();
     if (!user) return;
-
+  
     try {
-      const updatedPromotions = promotions.filter((_, i) => i !== index);
       const userDoc = doc(db, 'usuario', user.uid);
-      await updateDoc(userDoc, {
-        promocoes: updatedPromotions
-      });
-
-      setPromotions(updatedPromotions);
-      setShowConfirmDelete(null);
+      const docSnapshot = await getDoc(userDoc);
+      
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        const allPromotions = data.promocoes || [];
+        
+        // Find the promotion to update and mark it as inactive
+        const updatedPromotions = allPromotions.map((p: any, i: number) => 
+          i === index ? { ...p, ativa: false } : p
+        );
+  
+        await updateDoc(userDoc, {
+          promocoes: updatedPromotions
+        });
+  
+        setPromotions(promotions.filter((_, i) => i !== index));
+        setShowConfirmDelete(null);
+      }
     } catch (error) {
       console.error('Erro ao deletar promoção:', error);
       alert('Erro ao deletar promoção. Tente novamente.');
@@ -148,12 +156,11 @@ const ListaPromocoes: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {promotions.map((promo, index) => (
               <div
-              key={index}
-              onClick={() => router.push(`/promocao/${promo.id}`)}
-              className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
-            >
+                key={index}
+                onClick={() => router.push(`/promocao/${promo.id}`)}
+                className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
+              >
                 <div className="p-4">
-                  {/* Imagem */}
                   <div className="w-full h-48 bg-gray-100 rounded-lg overflow-hidden mb-4">
                     {promo.imagem ? (
                       <img
@@ -180,14 +187,16 @@ const ListaPromocoes: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Conteúdo */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-start">
                       <h2 className="text-lg font-semibold text-gray-800 line-clamp-2">
                         {promo.titulo}
                       </h2>
                       <button
-                        onClick={() => setShowConfirmDelete(index)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowConfirmDelete(index);
+                        }}
                         className="p-2 text-gray-400 hover:text-red-500 transition-colors duration-200"
                       >
                         <svg
@@ -256,9 +265,11 @@ const ListaPromocoes: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Modal de Confirmação */}
                 {showConfirmDelete === index && (
-                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                  <div 
+                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
                       <h3 className="text-lg font-semibold text-gray-800 mb-4">
                         Confirmar Exclusão
@@ -268,13 +279,16 @@ const ListaPromocoes: React.FC = () => {
                       </p>
                       <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
                         <button
-                          onClick={() => setShowConfirmDelete(null)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowConfirmDelete(null);
+                          }}
                           className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md transition-colors w-full sm:w-auto"
                         >
                           Cancelar
                         </button>
                         <button
-                          onClick={() => handleDeletePromotion(index)}
+                          onClick={(e) => handleDeletePromotion(e, index)}
                           className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors w-full sm:w-auto"
                         >
                           Deletar
