@@ -100,15 +100,19 @@ const ListaPromocoes: React.FC = () => {
         const data = docSnapshot.data();
         const allPromotions = data.promocoes || [];
         
-        // Find the promotion to update and mark it as inactive
-        const updatedPromotions = allPromotions.map((p: any, i: number) => 
-          i === index ? { ...p, ativa: false } : p
+        // Get the promotion ID we want to delete
+        const promotionToDelete = promotions[index].id;
+        
+        // Find and update the correct promotion in the full array
+        const updatedPromotions = allPromotions.map((p: any) => 
+          p.id === promotionToDelete ? { ...p, ativa: false } : p
         );
   
         await updateDoc(userDoc, {
           promocoes: updatedPromotions
         });
   
+        // Update local state
         setPromotions(promotions.filter((_, i) => i !== index));
         setShowConfirmDelete(null);
       }
