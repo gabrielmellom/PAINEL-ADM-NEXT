@@ -15,7 +15,7 @@ const PromocoesModal = () => {
   };
 
   const handlePromocoesInativas = () => {
-    router.push('/promocoes/inativas');
+    router.push('/promocao/inativas');
   };
 
   return (
