@@ -1,9 +1,14 @@
 "use client"
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import { db } from "../../../config/firebase";
+import { useRouter } from 'next/navigation';
 
 const SocialMidia = () => {
+    const router = useRouter();
+    const auth = getAuth();
+    const [user, setUser] = useState<User | null>(null);
     const [socialLinks, setSocialLinks] = useState({
         insta: { url: '', active: false },
         face: { url: '', active: false },
@@ -12,39 +17,61 @@ const SocialMidia = () => {
         youtube: { url: '', active: false }
     });
 
-    const userId = localStorage.getItem("userId");
-
     useEffect(() => {
-        const fetchSocialLinks = async () => {
-            if (userId) {
-                const userDocRef = doc(db, "usuario", userId);
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    const data = userDoc.data();
-                    setSocialLinks(data.social || socialLinks);
-                }
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            if (currentUser) {
+                setUser(currentUser);
+                fetchSocialLinks(currentUser.uid);
+            } else {
+                // Usuário não está autenticado, redirecionar para login
+                router.push('/login');
             }
-        };
-        fetchSocialLinks();
-    }, [userId]);
+        });
+
+        // Cleanup subscription
+        return () => unsubscribe();
+    }, []);
+
+    const fetchSocialLinks = async (userId:string) => {
+        try {
+            const userDocRef = doc(db, "usuario", userId);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                const data = userDoc.data();
+                setSocialLinks(data.social || socialLinks);
+            }
+        } catch (error) {
+            console.error("Erro ao buscar links sociais:", error);
+        }
+    };
 
     const handleSocialLinkChange = async (platform: 'insta' | 'face' | 'tiktok' | 'whats' | 'youtube', field: 'url' | 'active', value: string | boolean) => {
-       
-        setSocialLinks(prevLinks => ({
-            ...prevLinks,
-            [platform]: {
-                ...prevLinks[platform],
-                [field]: value
+        try {
+            if (!user) {
+                console.error("Usuário não autenticado");
+                return;
             }
-        }));
 
-        if (userId) {
-            const userDocRef = doc(db, "usuario", userId);
+            setSocialLinks(prevLinks => ({
+                ...prevLinks,
+                [platform]: {
+                    ...prevLinks[platform],
+                    [field]: value
+                }
+            }));
+
+            const userDocRef = doc(db, "usuario", user.uid);
             await updateDoc(userDocRef, {
                 [`social.${platform}.${field}`]: value
             });
+        } catch (error) {
+            console.error("Erro ao atualizar link social:", error);
         }
     };
+
+    if (!user) {
+        return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    }
 
     return (
         <div className="flex items-center justify-center min-h-screen">
